@@ -28,6 +28,8 @@
 #include <bit_pack_unpack.h>
 #include <range_coder.h>
 #include <wav.h>
+#include <unistd.h>
+#include <getopt.h>
 
 void
 exit_error (const char *msg, const char *error)
@@ -51,7 +53,7 @@ write_block_params (FILE *dest, uint8_t initial_sample, uint8_t length)
 }
 
 static const char usage[] = "\
-\033[97mUsage:\033[0m encoder (mode) infile.wav outfile.aud [-d|--dither [strength]]\n\
+\033[97mUsage:\033[0m encoder (mode) infile.wav -o outfile.aud [-d|--dither [strength]]\n\
 - Parameters\n\
   - \033[96mmode\033[0m - Selects the encoding mode; the following modes are\n\
     supported (in increasing order of bitrate):\n\
@@ -172,7 +174,7 @@ main (int argc, char **argv)
 	}
 	
 	optind = 2; // skip 1st arg, its always mode
-	struct options long_opts[] = {
+	struct option long_opts[] = {
 		{"dither", 2, NULL, 'd'},
 		{"output", 1, NULL, 'o'},
 		{NULL,     0, NULL,  0 },
@@ -181,13 +183,15 @@ main (int argc, char **argv)
 		switch (opt) {
 			case 'o':
 				if (outfile_name != NULL) {
-					abort(); // -o passed twice
+					fprintf(stderr, "-o option can only be used once!");
+					exit_error(usage, NULL); // -o passed twice
 				}
 				outfile_name = optarg;
 				break;
 			case 'd':
 				if (dither) {
-					abort(); // -d passed twice
+					fprintf(stderr, "-d option can only be used once!");
+					exit_error(usage, NULL); // -o passed twice
 				}
 				dither = true;
 				if (optarg) {
@@ -200,9 +204,10 @@ main (int argc, char **argv)
 				}
 				break;
 			case '?':
-				abort(); // getopt prints the error for us
+				exit(1); // getopt prints the error for us
 			default:
-				abort(); // probably a new flag was added and isnt handled yet
+				fprintf(stderr, "Fatal error - unrecognized option -%c", opt);
+				exit(1); // probably a new flag was added and isnt handled yet
 		}
 	}
 	
