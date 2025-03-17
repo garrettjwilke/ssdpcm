@@ -86,8 +86,8 @@ main (int argc, char **argv)
 	
 	size_t block_count = 0;
 	
-	char *infile_name;
-	char *outfile_name;
+	char *infile_name = NULL;
+	char *outfile_name = NULL;
 	wav_sample_fmt format;
 	ssdpcm_block_mode mode;
 	uint32_t sample_rate;
@@ -114,11 +114,12 @@ main (int argc, char **argv)
 	
 	bool dither = false;
 	uint8_t dither_strength = 0;
+	int opt;
 	
 	memset(slopes[0], 0, sizeof(sample_t) * 16);
 	memset(slopes[1], 0, sizeof(sample_t) * 16);
 	
-	if (argc < 4 || argc > 6)
+	if (argc < 2)
 	{
 		exit_error(usage, NULL);
 	}
@@ -170,30 +171,48 @@ main (int argc, char **argv)
 		exit_error(usage, NULL);
 	}
 	
-	if (argc > 4)
-	{
-		bool is_dither_arg = !strcmp("-d", argv[4]) || !strcmp("--dither", argv[4]);
-		if (is_dither_arg)
-		{
-			dither = true;
-		}
-		else
-		{
-			fprintf(stderr, "Invalid dither argument '%s'.\n", argv[4]);
-			exit_error(usage, NULL);
-		}
-		if (argc > 5) {
-			int result = sscanf(argv[5], "%hhu", &dither_strength);
-			if (result != 1)
-			{
-				fprintf(stderr, "Invalid dither strength '%s'.\n", argv[5]);
-				exit_error(usage, NULL);
-			}
+	optind = 2; // skip 1st arg, its always mode
+	struct options long_opts[] = {
+		{"dither", 2, NULL, 'd'},
+		{"output", 1, NULL, 'o'},
+		{NULL,     0, NULL,  0 },
+	};
+	while ((opt = getopt_long(argc, argv, "d::o:", long_opts, NULL)) != -1) {
+		switch (opt) {
+			case 'o':
+				if (outfile_name != NULL) {
+					abort(); // -o passed twice
+				}
+				outfile_name = optarg;
+				break;
+			case 'd':
+				if (dither) {
+					abort(); // -d passed twice
+				}
+				dither = true;
+				if (optarg) {
+					int result = sscanf(optarg, "%hhu", &dither_strength); // you should use strtoul instead
+					if (result != 1)
+					{
+						fprintf(stderr, "Invalid dither strength '%s'.\n", argv[5]);
+						exit_error(usage, NULL);
+					}
+				}
+				break;
+			case '?':
+				abort(); // getopt prints the error for us
+			default:
+				abort(); // probably a new flag was added and isnt handled yet
 		}
 	}
 	
-	infile_name = argv[2];
-	outfile_name = argv[3];
+	if (optind + 1 != argc) {
+		abort(); // zero or multiple inputs
+	}
+	infile_name = argv[optind];
+	if (outfile_name == NULL) {
+		abort();
+	}
 	
 	infile = wav_alloc(&err);
 	outfile = wav_alloc(&err);
