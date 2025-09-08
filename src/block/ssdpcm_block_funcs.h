@@ -43,10 +43,14 @@ typedef struct {
 void block_iterator_init_ (ssdpcm_block_iterator *iter, ssdpcm_block *block, sample_t *raw);
 
 sample_t calc_sample_ (ssdpcm_block_iterator *dec, codeword_t slope_code);
+sample_t uncalc_sample_ (ssdpcm_block_iterator *dec, codeword_t slope_code);
 void decode_one_sample_no_advance_ (ssdpcm_block_iterator *dec);
+void undecode_one_sample_no_backtrack_ (ssdpcm_block_iterator *dec);
 void decode_one_sample_ (ssdpcm_block_iterator *dec);
 void enqueue_one_codeword_ (ssdpcm_block_iterator *dest, codeword_t c);
+void dequeue_one_codeword_ (ssdpcm_block_iterator *dest);
 
 codeword_t find_best_delta_ (ssdpcm_encoder *enc);
+codeword_t find_best_delta_lookahead_ (ssdpcm_encoder *enc, uint8_t lookahead, uint64_t *out_error);
 
 #endif

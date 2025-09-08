@@ -79,6 +79,29 @@ sigma_tracker_get_accumulated_error (void **ext_state)
 
 /* ------------------------------------------------------------------------- */
 void
+sigma_tracker_advance (void **ext_state, uint64_t error)
+{
+	sigma_tracker_internal *state = *ext_state;
+	
+	decode_one_sample_no_advance_(state->sigma_dec);
+	state->sigma_dec->index++;
+	state->acc_error += error;
+}
+
+/* ------------------------------------------------------------------------- */
+void
+sigma_tracker_backtrack (void **ext_state, uint64_t local_error)
+{
+	debug_assert(ext_state != NULL);
+	debug_assert(*ext_state != NULL);
+	sigma_tracker_internal *state = *ext_state;
+	state->sigma_dec->index--;
+	undecode_one_sample_no_backtrack_(state->sigma_dec);
+	state->acc_error -= local_error;
+}
+
+/* ------------------------------------------------------------------------- */
+void
 sigma_tracker_free (void **ext_state)
 {
 	debug_assert(ext_state != NULL);

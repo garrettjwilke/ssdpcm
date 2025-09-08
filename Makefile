@@ -19,7 +19,6 @@ CFLAGS_DEV := \
 	-Wextra \
 	-Werror \
 	-O3 \
-	-Ofast \
 	-fopenmp
 	
 

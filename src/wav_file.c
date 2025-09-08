@@ -1261,48 +1261,48 @@ wav_init_ssdpcm(wav_handle *w, wav_sample_fmt format, ssdpcm_block_mode mode, ui
 
 	ssdpcm_ex->block_length = block_length;
 	ssdpcm_ex->has_reference_sample_on_every_block = has_reference_sample;
-
+	
 	switch (mode)
 	{
-	case SS_SS1:
+		case SS_SS1:
 		ssdpcm_ex->num_slopes = 2;
 		ssdpcm_ex->bytes_per_read_alignment = 1;
-
+		
 		block_header_data_size = (ssdpcm_ex->bits_per_output_sample / 8) * (ssdpcm_ex->num_slopes / 2);
 		ssdpcm_ex->bytes_per_block = (ssdpcm_ex->block_length + 7) / 8 + block_header_data_size;
 		break;
-	case SS_SS1C:
+		case SS_SS1C:
 		ssdpcm_ex->num_slopes = 2;
 		ssdpcm_ex->bytes_per_read_alignment = 1;
-
+		
 		block_header_data_size = (ssdpcm_ex->bits_per_output_sample / 8) * (ssdpcm_ex->num_slopes / 2);
 		ssdpcm_ex->bytes_per_block = (ssdpcm_ex->block_length + 7) / 8 + block_header_data_size;
 		break;
-	case SS_SS1_6:
+		case SS_SS1_6:
 		ssdpcm_ex->num_slopes = 3;
 		ssdpcm_ex->bytes_per_read_alignment = 1;
-
+		
 		block_header_data_size = (ssdpcm_ex->bits_per_output_sample / 8) * (ssdpcm_ex->num_slopes / 2);
 		ssdpcm_ex->bytes_per_block = (ssdpcm_ex->block_length + 4) / 5 + block_header_data_size;
 		break;
-	case SS_SS2:
+		case SS_SS2:
 		ssdpcm_ex->num_slopes = 4;
 		ssdpcm_ex->bytes_per_read_alignment = 1;
-
+		
 		block_header_data_size = (ssdpcm_ex->bits_per_output_sample / 8) * (ssdpcm_ex->num_slopes / 2);
 		ssdpcm_ex->bytes_per_block = (ssdpcm_ex->block_length + 3) / 4 + block_header_data_size;
 		break;
-	case SS_SS2_3:
+		case SS_SS2_3:
 		ssdpcm_ex->num_slopes = 5;
 		ssdpcm_ex->bytes_per_read_alignment = 7;
-
+		
 		block_header_data_size = (ssdpcm_ex->bits_per_output_sample / 8) * (ssdpcm_ex->num_slopes / 2);
 		ssdpcm_ex->bytes_per_block = (ssdpcm_ex->block_length * 7 + 23) / 24 + block_header_data_size;
 		break;
-	case SS_SS3:
+		case SS_SS3:
 		ssdpcm_ex->num_slopes = 8;
 		ssdpcm_ex->bytes_per_read_alignment = 3;
-
+		
 		block_header_data_size = (ssdpcm_ex->bits_per_output_sample / 8) * (ssdpcm_ex->num_slopes / 2);
 		ssdpcm_ex->bytes_per_block = (ssdpcm_ex->block_length * 3 + 7) / 8 + block_header_data_size;
 		break;
@@ -1457,7 +1457,7 @@ wav_read_ssdpcm_block(wav_handle *w, void *reference, void *slopes, void *code, 
 	if ((ssdpcm_ex->has_reference_sample_on_every_block && (channel_idx % num_channels) == 0)
 		|| wav_tell_bytes(w) == 0)
 	{
-		amt_to_read = sample_size_bytes;
+		amt_to_read = sample_size_bytes * num_channels;
 		actually_read = fread(reference, sample_size_bytes, num_channels, w->fp);
 		if (actually_read != num_channels)
 		{
@@ -1545,7 +1545,7 @@ wav_get_ssdpcm_code_bytes_per_block(wav_handle *w, err_t *err_out)
 	*err_out = E_OK;
 	wav_ssdpcm_extra_chunk *ssdpcm_ex = w->header->ssdpcm_extra_chunk;
 	size_t sample_size_bytes = ssdpcm_ex->bits_per_output_sample / 8;
-	size_t block_header_data_size = sample_size_bytes * (ssdpcm_ex->num_slopes / 2 + (ssdpcm_ex->has_reference_sample_on_every_block ? 1 : 0));
+	size_t block_header_data_size = sample_size_bytes * (ssdpcm_ex->num_slopes / 2);
 	return ssdpcm_ex->bytes_per_block - block_header_data_size;
 }
 

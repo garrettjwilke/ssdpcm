@@ -53,7 +53,7 @@ write_block_params (FILE *dest, uint8_t initial_sample, uint8_t length)
 }
 
 static const char usage[] = "\
-\033[97mUsage:\033[0m encoder (mode) infile.wav -o outfile.aud [-d|--dither [strength]]\n\
+\033[97mUsage:\033[0m encoder (mode) infile.wav -o outfile.aud [-l|--lookahead [depth]]\n\
 - Parameters\n\
   - \033[96mmode\033[0m - Selects the encoding mode; the following modes are\n\
     supported (in increasing order of bitrate):\n\
@@ -69,7 +69,12 @@ static const char usage[] = "\
   decode mode.\n\
 - \033[96moutfile.aud\033[0m is the path for the encoded output file, or the\n\
   decoded WAV file in the case of the decode mode.\n\
-- \033[96m-d\033[0m/\033[96m--dither\033[0m enables/disables dithering of the input WAV file to be encoded.\n\
+- \033[96m-l\033[0m/\033[96m--lookahead\033[0m enables lookahead search during encoding. This slightly decreases the output noise level\n\
+  in exchange for much longer encoding times.\n\
+  This also takes an optional argument that defines the lookahead depth, where\n\
+  valid values range from \033[96m1\0330mto \033[96m8\0330m, with \033[96m2\0330m being the default.\n"
+#if 0
+"- \033[96m-d\033[0m/\033[96m--dither\033[0m enables/disables dithering of the input WAV file to be encoded.\n\
   It's disabled by default. Use this flag to enable this behavior.\n\
   This also takes an optional argument that defines the dithering strength.\n\
   Valid values range from \033[96m0\033[0m to \033[96m255\033[0m, where \033[96m0\033[0m is the default and \033[96m255\033[0m is insanely\n\
@@ -77,6 +82,8 @@ static const char usage[] = "\
   \033[96mNOTE:\033[0m dithering is currently not working right and it's not advised to\n\
   use it.\n\
 ";
+#endif
+;
 
 #define SAMPLES_PER_BLOCK 128
 
@@ -101,6 +108,7 @@ main (int argc, char **argv)
 	bool comb_filter = false;
 	bool decode_mode = false;
 	bool has_reference_sample_on_every_block = false;
+	uint8_t lookahead = 0;
 	
 	void *code_buffer[2];
 	void *sample_conv_buffer = NULL;
@@ -173,50 +181,72 @@ main (int argc, char **argv)
 		exit_error(usage, NULL);
 	}
 	
-	optind = 2; // skip 1st arg, its always mode
+	optind = 2;
 	struct option long_opts[] = {
 		{"dither", 2, NULL, 'd'},
 		{"output", 1, NULL, 'o'},
+		{"lookahead", 2, NULL, 'l'},
 		{NULL,     0, NULL,  0 },
 	};
-	while ((opt = getopt_long(argc, argv, "d::o:", long_opts, NULL)) != -1) {
+	while ((opt = getopt_long(argc, argv, "d::o:l::", long_opts, NULL)) != -1) {
 		switch (opt) {
 			case 'o':
 				if (outfile_name != NULL) {
-					fprintf(stderr, "-o option can only be used once!");
-					exit_error(usage, NULL); // -o passed twice
+					fprintf(stderr, "Error: -o/--output option can only be used once! Check --help for more info.\n");
+					exit(1);
 				}
 				outfile_name = optarg;
 				break;
 			case 'd':
 				if (dither) {
-					fprintf(stderr, "-d option can only be used once!");
-					exit_error(usage, NULL); // -o passed twice
+					fprintf(stderr, "Error: -d/--dither option can only be used once! Check --help for more info.\n");
+					exit(1);
 				}
 				dither = true;
 				if (optarg) {
-					int result = sscanf(optarg, "%hhu", &dither_strength); // you should use strtoul instead
+					int result = sscanf(optarg, "%hhu", &dither_strength); // TODO: use strtoul instead
 					if (result != 1)
 					{
-						fprintf(stderr, "Invalid dither strength '%s'.\n", argv[5]);
-						exit_error(usage, NULL);
+						fprintf(stderr, "Invalid dither strength '%s'. Check --help for more info.\n", optarg);
+						exit(1);
 					}
 				}
 				break;
+			case 'l':
+				if (optarg) {
+					int result = sscanf(optarg, "%hhu", &lookahead);
+					if (result != 1)
+					{
+						fprintf(stderr, "Invalid lookahead value '%s'. Check --help for more info.\n", optarg);
+						exit(1);
+					}
+					if (lookahead > 8)
+					{
+						fprintf(stderr, "Invalid lookahead value %d - cannot be larger than 8. Check --help for more info.\n", lookahead);
+						exit(1);
+					}
+				}
+				else
+				{
+					lookahead = 2;
+				}
+				break;
 			case '?':
-				exit(1); // getopt prints the error for us
+				// getopt_long already printed the error beforehand for us.
+				fputs("Check --help for more info.\n", stderr);
+				exit(1);
 			default:
-				fprintf(stderr, "Fatal error - unrecognized option -%c", opt);
-				exit(1); // probably a new flag was added and isnt handled yet
+				fprintf(stderr, "Fatal error: unrecognized registered option -%c\nPlease report this to the ssdpcm developers.\n", opt);
+				exit(1);
 		}
 	}
 	
 	if (optind + 1 != argc) {
-		abort(); // zero or multiple inputs
+		exit_error(usage, NULL);
 	}
 	infile_name = argv[optind];
 	if (outfile_name == NULL) {
-		abort();
+		exit_error("You must specify an output file (-o/--output)! Check --help for more info.\n", NULL);
 	}
 	
 	infile = wav_alloc(&err);
@@ -351,6 +381,7 @@ main (int argc, char **argv)
 		block[i].deltas = delta_buffer[i];
 		block[i].slopes = slopes[i];
 		block[i].length = block_length;
+		block[i].lookahead = lookahead;
 	}
 	memset(&bitpacker, 0, sizeof(bitstream_buffer));
 	bitpacker.byte_buf.buffer_size = code_buffer_size;

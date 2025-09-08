@@ -28,6 +28,8 @@
 #include <range_coder.h>
 #include <wav.h>
 #include <omp.h>
+#include <unistd.h>
+#include <getopt.h>
 
 void
 exit_error (const char *msg, const char *error)
@@ -44,7 +46,7 @@ exit_error (const char *msg, const char *error)
 }
 
 static const char usage[] = "\
-\033[97mUsage:\033[0m encoder_parallel (mode) infile.wav outfile.aud\n\
+\033[97mUsage:\033[0m encoder_parallel (mode) infile.wav -o outfile.aud [-l|--lookahead [depth]]\n\
 This encoder takes advantage of multithreading to accelerate encoding of the\n\
 higher quality modes, such as ss2, ss2.3 and ss3. For lower quality modes,\n\
 usage of the normal encoder is recommended.\n\
@@ -62,7 +64,23 @@ usage of the normal encoder is recommended.\n\
   PCM WAV file for the encoding modes, or an encoded .aud SSDPCM file for the\n\
   decode mode.\n\
 - \033[96moutfile.aud\033[0m is the path for the encoded output file, or the\n\
-  decoded WAV file in the case of the decode mode.";
+  decoded WAV file in the case of the decode mode.\n\
+- \033[96m-l\033[0m/\033[96m--lookahead\033[0m enables lookahead search during encoding.\n\
+  This slightly decreases the output noise level in exchange for much longer encoding times.\n\
+  This also takes an optional argument that defines the lookahead depth, where\n\
+  valid values range from \033[96m1\033[0m to \033[96m8\033[0m, with \033[96m2\033[0m being the default.\n"
+#if 0
+"- \033[96m-d\033[0m/\033[96m--dither\033[0m enables/disables dithering of the input WAV file to be encoded.\n\
+  It's disabled by default. Use this flag to enable this behavior.\n\
+  This also takes an optional argument that defines the dithering strength.\n\
+  Valid values range from \033[96m0\033[0m to \033[96m255\033[0m, where \033[96m0\033[0m is the default and \033[96m255\033[0m is insanely\n\
+  strong.\n\
+  \033[96mNOTE:\033[0m dithering is currently not working right and it's not advised to\n\
+  use it.\n\
+";
+#endif
+;
+
 
 
 
@@ -77,12 +95,12 @@ main (int argc, char **argv)
 	size_t block_count = 0;
 	
 	// Global read-only variables (during the encode loop)
-	char *infile_name;
-	char *outfile_name;
+	char *infile_name = NULL;
+	char *outfile_name = NULL;
 	wav_sample_fmt format;
 	ssdpcm_block_mode mode;
 	uint32_t sample_rate;
-	size_t code_buffer_size;
+	size_t code_buffer_size = 0;
 	long block_length;
 	int num_deltas;
 	sigma_tracker_methods sigma_methods = NULL;
@@ -91,12 +109,15 @@ main (int argc, char **argv)
 	bool comb_filter = false;
 	bool decode_mode = false;
 	bool has_reference_sample_on_every_block = false;
+	uint8_t lookahead = 0;
 	
 	// Thread-local variables
 
 	err_t err;
 	
-	if (argc != 4)
+	int opt;
+
+	if (argc < 2)
 	{
 		exit_error(usage, NULL);
 	}
@@ -148,8 +169,63 @@ main (int argc, char **argv)
 		exit_error(usage, NULL);
 	}
 	
-	infile_name = argv[2];
-	outfile_name = argv[3];
+	optind = 2;
+	struct option long_opts[] = {
+		{"output", 1, NULL, 'o'},
+		{"lookahead", 2, NULL, 'l'},
+		{NULL,     0, NULL,  0 },
+	};
+	while ((opt = getopt_long(argc, argv, "o:l::", long_opts, NULL)) != -1) {
+		switch (opt) {
+			case 'o':
+				if (outfile_name != NULL) {
+					fprintf(stderr, "Error: -o/--output option can only be used once! Check --help for more info.\n");
+					exit(1);
+				}
+				outfile_name = optarg;
+				break;
+			case 'l':
+				if (optarg) {
+					int result = sscanf(optarg, "%hhu", &lookahead);
+					if (result != 1)
+					{
+						fprintf(stderr, "Invalid lookahead value '%s'. Check --help for more info.\n", optarg);
+						exit(1);
+					}
+					if (lookahead > 8)
+					{
+						fprintf(stderr, "Invalid lookahead value %d - cannot be larger than 8. Check --help for more info.\n", lookahead);
+						exit(1);
+					}
+				}
+				else
+				{
+					lookahead = 2;
+				}
+				break;
+			case '?':
+				// getopt_long already printed the error beforehand for us.
+				fputs("Check --help for more info.\n", stderr);
+				exit(1);
+			default:
+				fprintf(stderr, "Fatal error: unrecognized registered option -%c\nPlease report this to the ssdpcm developers.\n", opt);
+				exit(1);
+		}
+	}
+	
+	if (optind + 1 != argc) {
+		exit_error(usage, NULL);
+	}
+	infile_name = argv[optind];
+	if (outfile_name == NULL) {
+		exit_error("You must specify an output file (-o/--output)! Check --help for more info.\n", NULL);
+	}
+
+
+	if (!strcmp(outfile_name, infile_name))
+	{
+		exit_error("Input file and output file cannot be the same file!", NULL);
+	}
 	
 	infile = wav_alloc(&err);
 	outfile = wav_alloc(&err);
@@ -257,7 +333,7 @@ main (int argc, char **argv)
 	{
 		omp_set_num_threads(1);
 	}
-	
+
 #pragma omp parallel firstprivate(err)
 	{
 		void *code_buffer[2] = {NULL, NULL};
@@ -302,11 +378,13 @@ main (int argc, char **argv)
 			block[n].slopes = slopes[n];
 			block[n].length = block_length;
 			block[n].num_deltas = num_deltas;
+			block[n].lookahead = lookahead;
 		}
 
 		memset(&bitpacker, 0, sizeof(bitstream_buffer));
 		bitpacker.byte_buf.buffer_size = code_buffer_size;
 
+		// why did I make this an infinite loop? :thinking_face:
 		while (1 || (err == E_OK && ((decode_mode) || (read_data == block_length))))
 		{
 			
@@ -459,7 +537,7 @@ main (int argc, char **argv)
 					{ block_index = block_count; block_count++; }
 					for (n = 0; n <= stereo; n++)
 					{
-						err = wav_read_ssdpcm_block(infile, initial_sample_temp + n * 2, sample_conv_buffer + n * (num_deltas / 2) * 4, code_buffer[n], n);
+						err = wav_read_ssdpcm_block(infile, initial_sample_temp, sample_conv_buffer + n * (num_deltas / 2) * 4, code_buffer[n], n);
 						if (err != E_OK)
 						{
 							break;
@@ -489,7 +567,7 @@ main (int argc, char **argv)
 						if (n == 0 && has_reference_sample_on_every_block)
 						{
 							sample_decode_u8(&block[0].initial_sample, initial_sample_temp, 1);
-							sample_decode_u8(&block[1].initial_sample, initial_sample_temp + 2, 1);
+							sample_decode_u8(&block[1].initial_sample, initial_sample_temp + 1, 1);
 						}
 						break;
 					case W_S16LE:

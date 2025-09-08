@@ -30,6 +30,7 @@ typedef struct
 
 	codeword_t *deltas;
 	size_t length;
+	uint8_t lookahead;
 } ssdpcm_block;
 
 typedef struct

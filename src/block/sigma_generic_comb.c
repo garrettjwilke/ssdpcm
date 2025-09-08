@@ -23,7 +23,8 @@ sigma_tracker_methods sigma_generic_comb = &(const struct sigma_tracker_methods_
 	&sigma_tracker_alloc,
 	&sigma_tracker_init,
 	&sigma_generic_comb_calc_error,
-	&sigma_generic_comb_advance,
+	&sigma_tracker_advance,
+	&sigma_tracker_backtrack,
 	&sigma_tracker_get_accumulated_error,
 	&sigma_tracker_free
 };

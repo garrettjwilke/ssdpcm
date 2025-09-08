@@ -34,7 +34,10 @@ typedef struct sigma_tracker_methods_s
 	uint64_t (*calc_error)(void **state, codeword_t delta);
 	
 	// Advance the sigma tracker's decoder by one sample and accumulate the calculated error.
-	void (*advance)(void **state);
+	void (*advance)(void **state, uint64_t error);
+
+	// Rollback the sigma tracker's decoder by one sample and subtract the local error.
+	void (*backtrack)(void **state, uint64_t local_error);
 	
 	// Get the accumulated error.
 	uint64_t (*get_accumulated_error)(void **state);
@@ -68,6 +71,8 @@ uint64_t ssdpcm_block_encode (ssdpcm_block *block, sample_t *in, sigma_tracker *
 void sigma_tracker_alloc (void **ext_state);
 void sigma_tracker_init (void **ext_state, ssdpcm_block_iterator *iter);
 uint64_t sigma_tracker_get_accumulated_error (void **ext_state);
+void sigma_tracker_advance(void **ext_state, uint64_t error);
+void sigma_tracker_backtrack(void **ext_state, uint64_t local_error);
 void sigma_tracker_free (void **ext_state);
 
 uint64_t sigma_generic_calc_error (void **ext_state, codeword_t delta);
