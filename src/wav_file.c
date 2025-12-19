@@ -1477,7 +1477,7 @@ wav_read_ssdpcm_block(wav_handle *w, void *reference, void *slopes, void *code, 
 	if (actually_read != ssdpcm_ex->num_slopes / 2)
 	{
 		// File ended in the middle of a block
-		fprintf(stderr, "\namt_we_can_read: %ld\n", amt_we_can_read);
+		fprintf(stderr, "\namt_we_can_read: %lld\n", amt_we_can_read);
 		return E_PREMATURE_END_OF_FILE;
 	}
 
@@ -1485,7 +1485,7 @@ wav_read_ssdpcm_block(wav_handle *w, void *reference, void *slopes, void *code, 
 	if (actually_read != code_size)
 	{
 		// File ended in the middle of a block
-		fprintf(stderr, "\namt_we_can_read: %ld\n", amt_we_can_read);
+		fprintf(stderr, "\namt_we_can_read: %lld\n", amt_we_can_read);
 		return E_PREMATURE_END_OF_FILE;
 	}
 	

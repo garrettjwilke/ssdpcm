@@ -9,7 +9,6 @@ CFLAGS_DBG := \
 	-Werror \
 	-O0 \
 	-g \
-	-fopenmp \
 	-fsanitize=address \
 	-fno-omit-frame-pointer \
 	-fno-optimize-sibling-calls \
@@ -18,8 +17,7 @@ CFLAGS_DEV := \
 	-Wall \
 	-Wextra \
 	-Werror \
-	-O3 \
-	-fopenmp
+	-O3
 	
 
 DEFINES_DEV := \
@@ -100,8 +98,7 @@ objects_encp := \
 	bit_pack_unpack.o \
 	wav_file.o \
 	error_strs.o \
-	range_coder.o \
-	encoder_parallel.o
+	range_coder.o
 
 
 vpath %.c $(SRC_DIR) $(SRC_DIR)/block
@@ -109,7 +106,7 @@ vpath %.o $(BUILD_DIR)
 
 .PHONY: build_dirs all clean
 
-all: build_dirs $(BUILD_DIR)/nes_encoder $(BUILD_DIR)/wav_simulator $(BUILD_DIR)/encoder $(BUILD_DIR)/encoder_parallel
+all: build_dirs $(BUILD_DIR)/nes_encoder $(BUILD_DIR)/wav_simulator $(BUILD_DIR)/encoder
 
 $(BUILD_DIR)/encoder_parallel: $(objects_encp)
 	$(CC) $(CFLAGS) -o $(BUILD_DIR)/encoder_parallel $(patsubst %,$(BUILD_DIR)/%,$(objects_encp)) -lm
