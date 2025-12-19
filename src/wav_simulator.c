@@ -86,10 +86,9 @@ main (int argc, char **argv)
 	//int bits_per_sample;
 	bool comb_filter = false;
 	
-	byte_buffer = malloc(SAMPLES_PER_BLOCK * 2);
-
 	block.deltas = delta_buffer;
 	block.slopes = slopes;
+	memset(slopes, 0, sizeof(sample_t) * 16);
 	
 	if (argc < 4 || argc > 5)
 	{
@@ -151,6 +150,7 @@ main (int argc, char **argv)
 	
 	//block.num_deltas = 1 << bits_per_sample;
 	block.length = block_length;
+	block.lookahead = 0;
 	
 	infile = calloc(1, sizeof(wav_handle));
 	outfile = calloc(1, sizeof(wav_handle));
@@ -192,6 +192,7 @@ main (int argc, char **argv)
 	}
 	
 	sigma.methods->alloc(&sigma.state);
+	fprintf(stderr, "[DEBUG] Allocated sigma tracker state\n");
 	
 	sample_rate = wav_get_sample_rate(infile);
 	
@@ -203,6 +204,20 @@ main (int argc, char **argv)
 		exit_error(err_msg, strerror(errno));
 	}
 	wav_set_format(outfile, format);
+	
+	// Allocate buffer using the maximum of input and output sizes to be safe
+	size_t buffer_size = wav_get_sizeof(infile, block_length);
+	size_t output_size = wav_get_sizeof(outfile, block_length);
+	if (output_size > buffer_size)
+	{
+		buffer_size = output_size;
+	}
+	byte_buffer = malloc(buffer_size);
+	if (byte_buffer == NULL)
+	{
+		exit_error("Memory allocation failed", NULL);
+	}
+	fprintf(stderr, "[DEBUG] Allocated byte_buffer: %zu bytes (block_length=%ld)\n", buffer_size, block_length);
 	wav_set_sample_rate(outfile, sample_rate);
 	wav_write_header(outfile);
 	wav_seek(infile, 0, SEEK_SET);
@@ -244,8 +259,11 @@ main (int argc, char **argv)
 		}
 		
 		fprintf(stderr, "\rEncoding block %lu...", block_count);
+		fprintf(stderr, "\n[DEBUG] Before encode_binary_search: block_length=%ld, num_deltas=%d\n", block_length, block.num_deltas);
 		(void) ssdpcm_encode_binary_search(&block, sample_buffer, &sigma);
+		fprintf(stderr, "[DEBUG] After encode_binary_search\n");
 		ssdpcm_block_decode(sample_buffer, &block);
+		fprintf(stderr, "[DEBUG] After block_decode\n");
 		temp_last_sample = sample_buffer[block_length - 1];
 		if (comb_filter)
 		{
@@ -253,6 +271,7 @@ main (int argc, char **argv)
 		}
 		block.initial_sample = temp_last_sample;
 		
+		fprintf(stderr, "[DEBUG] Before encoding samples to buffer\n");
 		switch (format)
 		{
 		case W_U8:
@@ -265,8 +284,11 @@ main (int argc, char **argv)
 			// unreachable
 			break;
 		}
+		fprintf(stderr, "[DEBUG] After encoding samples to buffer\n");
 		
+		fprintf(stderr, "[DEBUG] Before wav_write\n");
 		wav_write(outfile, byte_buffer, block_length, -1, &err);
+		fprintf(stderr, "[DEBUG] After wav_write\n");
 		if (err != E_OK)
 		{
 			char err_msg[256];
@@ -277,7 +299,9 @@ main (int argc, char **argv)
 			exit_error(err_msg, strerror(errno_copy));
 		}
 		
+		fprintf(stderr, "[DEBUG] Before wav_read\n");
 		read_data = wav_read(infile, byte_buffer, block_length, &err);
+		fprintf(stderr, "[DEBUG] After wav_read: read_data=%ld\n", read_data);
 		if (err != E_OK)
 		{
 			if (err == E_END_OF_STREAM)
